@@ -32,3 +32,11 @@ def get_token_by_auth_code(code: str):
     if "access_token" not in result:
         print("ERROR IN TOKEN RESPONSE:", result)  # 👈 Add this
     return result
+
+
+
+def refresh_access_token(refresh_token: str):
+    result = app.acquire_token_by_refresh_token(refresh_token, scopes=SCOPES)
+    if "access_token" not in result:
+        print("ERROR IN REFRESH:", result)
+    return result
