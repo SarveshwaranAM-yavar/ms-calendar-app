@@ -2,15 +2,15 @@ from datetime import datetime, timedelta
 import time
 from fastapi import FastAPI, Header, Request, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
-from auth import get_auth_url, get_token_by_auth_code, refresh_access_token
-from graph_api import create_event, update_event, delete_event
-from models import EventRequest
+from app.auth import get_auth_url, get_token_by_auth_code, refresh_access_token
+from app.graph_api import create_event, update_event, delete_event
+from app.models import EventRequest
 from typing import Optional
 
 from sqlalchemy.orm import Session
-from db_models import Token
-from db import get_db
-from services import get_email_from_id_token
+from app.db import Token
+from app.db import get_db
+from app.services import get_email_from_id_token
 
 app = FastAPI()
 token_store = {}
@@ -69,7 +69,7 @@ def auth_callback(code: str, db: Session = Depends(get_db)):
 
     return {"message": f"Authentication successful for {email}!"}
 
-# --- Helper function to get a valid token for a user ---
+# --- UPDATED HELPER FUNCTION WITH REFRESH LOGIC ---
 def get_user_token(email: str, db: Session) -> str:
     if not email:
         raise HTTPException(status_code=401, detail="Email header missing")
@@ -78,12 +78,28 @@ def get_user_token(email: str, db: Session) -> str:
     if not db_token:
         raise HTTPException(status_code=404, detail="User not found or not authenticated. Please login.")
 
-    # Here you would add logic to refresh the token if it's expired
-    # For simplicity, we'll just check if it exists for now.
+    # --- TOKEN REFRESH LOGIC ---
     if datetime.utcnow() > db_token.expires_at:
-        # Placeholder for refresh logic
-        print("Token expired. Refresh logic needed.")
-        raise HTTPException(status_code=401, detail="Token expired. Please login again.")
+        print(f"Token for {email} has expired. Attempting to refresh.")
+        if not db_token.refresh_token:
+            raise HTTPException(status_code=401, detail="Token expired and no refresh token available. Please login again.")
+
+        new_token_result = refresh_access_token(db_token.refresh_token)
+        
+        if "access_token" not in new_token_result:
+            # If refresh fails, user must re-authenticate
+            raise HTTPException(status_code=401, detail="Could not refresh token. Please login again.")
+
+        # Update the database with the new token information
+        db_token.access_token = new_token_result['access_token']
+        # Some flows provide a new refresh token, some don't. Update if available.
+        if 'refresh_token' in new_token_result:
+            db_token.refresh_token = new_token_result['refresh_token']
+        db_token.expires_at = datetime.utcnow() + timedelta(seconds=new_token_result['expires_in'])
+        
+        db.commit()
+        print(f"Token for {email} refreshed successfully.")
+        return db_token.access_token
 
     return db_token.access_token
 

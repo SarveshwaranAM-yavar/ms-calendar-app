@@ -1,6 +1,6 @@
 from msal import ConfidentialClientApplication
 from urllib.parse import urlencode
-from config import CLIENT_ID, CLIENT_SECRET, AUTHORITY, SCOPES,REDIRECT_URI
+from app.config import CLIENT_ID, CLIENT_SECRET, AUTHORITY, SCOPES,REDIRECT_URI
 
 app = ConfidentialClientApplication(
     client_id=CLIENT_ID,
@@ -37,8 +37,12 @@ def get_token_by_auth_code(code: str):
 
 def refresh_access_token(refresh_token: str):
     """
-    Uses MSAL to acquire a new access token using a refresh token.
+    Acquires a new access token using a refresh token.
     """
-    # Assuming 'app' is your MSAL ConfidentialClientApplication or PublicClientApplication instance
-    result = app.acquire_token_by_refresh_token(refresh_token, scopes=SCOPES)
+    result = app.acquire_token_by_refresh_token(
+        refresh_token=refresh_token,
+        scopes=SCOPES
+    )
+    if "access_token" not in result:
+        print("ERROR REFRESHING TOKEN:", result)
     return result

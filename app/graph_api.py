@@ -1,5 +1,5 @@
 import httpx
-from config import GRAPH_API_ENDPOINT
+from app.config import GRAPH_API_ENDPOINT
 
 async def create_event(access_token: str, event_data: dict):
     headers = {"Authorization": f"Bearer {access_token}"}
