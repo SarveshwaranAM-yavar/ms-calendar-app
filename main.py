@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
-from auth import get_auth_url, get_token_by_auth_code
+from auth import get_auth_url, get_token_by_auth_code, refresh_access_token
 from graph_api import create_event, update_event, delete_event
 from models import EventRequest
 from typing import Optional
@@ -23,15 +23,32 @@ def login():
 def auth_callback(code: Optional[str] = None):
     if not code:
         raise HTTPException(status_code=400, detail="Missing auth code")
-
+    print("Authorization code : 1111111111111",code)
     result = get_token_by_auth_code(code)
     if "access_token" in result:
-        # Save the token against a user/session
-        token_store["user"] = result
-        print("444444444444",token_store)
+        token_store["user"] = {
+            "access_token": result["access_token"],
+            "refresh_token": result.get("refresh_token"),  # NEW
+            "expires_in": result["expires_in"],
+        }
+        print("token store: 11111111111111111",token_store)
         return {"message": "Authentication successful!"}
     else:
         raise HTTPException(status_code=400, detail="Authentication failed")
+
+# Helper to get a fresh token when needed
+def get_valid_access_token():
+    user_token = token_store.get("user")
+    if not user_token:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    # In production, check for token expiry instead of always refreshing
+    refreshed = refresh_access_token(user_token["refresh_token"])
+    if "access_token" in refreshed:
+        user_token["access_token"] = refreshed["access_token"]
+        user_token["refresh_token"] = refreshed.get("refresh_token", user_token["refresh_token"])
+        return user_token["access_token"]
+    raise HTTPException(status_code=401, detail="Failed to refresh token")
 
 @app.post("/event/create")
 async def create_event_endpoint(event: EventRequest):
