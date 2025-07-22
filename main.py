@@ -1,3 +1,4 @@
+import time
 from fastapi import FastAPI, Request, HTTPException, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from auth import get_auth_url, get_token_by_auth_code, refresh_access_token
@@ -6,7 +7,10 @@ from models import EventRequest
 from typing import Optional
 
 app = FastAPI()
-token_store = {}  # In production, use a DB or encrypted store
+token_store = {}
+  # In production, use a DB or encrypted store
+EXPIRATION_BUFFER_SECONDS = 300
+
 
 @app.get("/")
 def root():
@@ -21,34 +25,66 @@ def login():
 
 @app.get("/callback")
 def auth_callback(code: Optional[str] = None):
+    """
+    Handles the callback from Microsoft after user authentication.
+    Exchanges the authorization code for an access token and refresh token.
+    """
     if not code:
-        raise HTTPException(status_code=400, detail="Missing auth code")
-    print("Authorization code : 1111111111111",code)
-    result = get_token_by_auth_code(code)
+        raise HTTPException(status_code=400, detail="Missing authorization code")
+
+    # Assuming get_token_by_auth_code is a wrapper around MSAL's acquire_token_by_auth_code_flow
+    result = get_token_by_auth_code(code) 
+    
     if "access_token" in result:
+        # Calculate the absolute expiration time (current time + duration)
+        expires_at = time.time() + result["expires_in"]
+        
         token_store["user"] = {
             "access_token": result["access_token"],
-            "refresh_token": result.get("refresh_token"),  # NEW
-            "expires_in": result["expires_in"],
+            "refresh_token": result.get("refresh_token"),
+            "expires_at": expires_at,  # Store the calculated timestamp
         }
-        print("token store: 11111111111111111",token_store)
         return {"message": "Authentication successful!"}
     else:
+        # Log the error from Microsoft for debugging
+        print("Authentication failed:", result.get("error_description"))
         raise HTTPException(status_code=400, detail="Authentication failed")
 
 # Helper to get a fresh token when needed
 def get_valid_access_token():
+    """
+    Retrieves a valid access token.
+    If the current token is expired or about to expire, it refreshes it.
+    Otherwise, it returns the existing token.
+    """
     user_token = token_store.get("user")
-    if not user_token:
-        raise HTTPException(status_code=401, detail="User not authenticated")
+    if not user_token or "refresh_token" not in user_token:
+        raise HTTPException(status_code=401, detail="User not authenticated or no refresh token found.")
 
-    # In production, check for token expiry instead of always refreshing
-    refreshed = refresh_access_token(user_token["refresh_token"])
-    if "access_token" in refreshed:
-        user_token["access_token"] = refreshed["access_token"]
-        user_token["refresh_token"] = refreshed.get("refresh_token", user_token["refresh_token"])
+    # Check if the token is expired or within the buffer period
+    if time.time() > user_token.get("expires_at", 0) - EXPIRATION_BUFFER_SECONDS:
+        print("Token expired or nearing expiration. Refreshing...")
+        refreshed_result = refresh_access_token(user_token["refresh_token"])
+        
+        if "access_token" in refreshed_result:
+            # Update the entire token in the store with new values
+            new_expires_at = time.time() + refreshed_result["expires_in"]
+            user_token["access_token"] = refreshed_result["access_token"]
+            user_token["expires_at"] = new_expires_at
+            # Microsoft sometimes provides a new refresh token
+            user_token["refresh_token"] = refreshed_result.get("refresh_token", user_token["refresh_token"])
+            
+            return user_token["access_token"]
+        else:
+            # If refresh fails, the user needs to log in again
+            print("ERROR: Could not refresh token.", refreshed_result.get("error_description"))
+            # Clear the invalid token from the store
+            token_store.clear()
+            raise HTTPException(status_code=401, detail="Could not refresh token. Please re-authenticate.")
+    else:
+        # Token is still valid, return it
+        print("Token is still valid.")
         return user_token["access_token"]
-    raise HTTPException(status_code=401, detail="Failed to refresh token")
 
 @app.post("/event/create")
 async def create_event_endpoint(event: EventRequest):
