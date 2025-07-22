@@ -11,3 +11,4 @@ class EventRequest(BaseModel):
     end_time: str
     attendees: Optional[List[EventAttendee]] = []
     is_online_meeting: Optional[bool] = False
+

@@ -17,6 +17,8 @@ SCOPES = ["Calendars.ReadWrite", "User.Read"]
 #Onlinemeetigns.ReadWrite
 GRAPH_API_ENDPOINT = "https://graph.microsoft.com/v1.0"
 
+DATABASE_URL = "postgresql://sarveshwaranam:421300@localhost:5432/ms_calendar_access"
+
 
 print("CLIENT_ID = ", CLIENT_ID)
 print("CLIENT_SECRET = ", CLIENT_SECRET)
