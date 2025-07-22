@@ -36,7 +36,9 @@ def get_token_by_auth_code(code: str):
 
 
 def refresh_access_token(refresh_token: str):
+    """
+    Uses MSAL to acquire a new access token using a refresh token.
+    """
+    # Assuming 'app' is your MSAL ConfidentialClientApplication or PublicClientApplication instance
     result = app.acquire_token_by_refresh_token(refresh_token, scopes=SCOPES)
-    if "access_token" not in result:
-        print("ERROR IN REFRESH:", result)
     return result
