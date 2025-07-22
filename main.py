@@ -6,6 +6,8 @@ from auth import get_auth_url, get_token_by_auth_code, refresh_access_token
 from graph_api import create_event, update_event, delete_event
 from models import EventRequest
 from typing import Optional
+from fastapi.middleware.cors import CORSMiddleware
+
 
 from sqlalchemy.orm import Session
 from db_models import Token
@@ -16,6 +18,21 @@ app = FastAPI()
 token_store = {}
   # In production, use a DB or encrypted store
 EXPIRATION_BUFFER_SECONDS = 300
+# Define allowed origins
+origins = [
+    "http://localhost:8000",  # React frontend local dev
+    "http://127.1.77.6:8000",
+    "*" , # Add production frontend domain here
+]
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],            # or ["*"] for public APIs (not recommended for prod)
+    allow_credentials=True,
+    allow_methods=["*"],              # or specify: ["GET", "POST", "PUT", ...]
+    allow_headers=["*"],              # or specify: ["Authorization", "Content-Type"]
+)
 
 
 @app.get("/")
