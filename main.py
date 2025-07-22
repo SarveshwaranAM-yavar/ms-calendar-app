@@ -174,6 +174,11 @@ async def delete_event_endpoint(event_id: str):
 
 
 @app.post("/logout")
-def logout():
-    token_store.pop("user", None)
-    return JSONResponse({"message": "Logged out successfully"})
+def logout(email: str = Header(...), db: Session = Depends(get_db)):
+    db_token = db.query(Token).filter(Token.email == email).first()
+    if db_token:
+        db.delete(db_token)
+        db.commit()
+        return JSONResponse({"message": f"Logged out successfully for {email}"})
+    else:
+        raise HTTPException(status_code=404, detail="User not found.")
